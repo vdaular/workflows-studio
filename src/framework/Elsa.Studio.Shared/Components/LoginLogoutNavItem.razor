@@ -1,0 +1,28 @@
+﻿@using Microsoft.AspNetCore.Authorization;
+@using Microsoft.AspNetCore.Components.Authorization;
+@using Microsoft.AspNetCore.Components;
+
+<Microsoft.AspNetCore.Components.Authorization.AuthorizeView>
+    <Authorized>
+        ¡Hola, <b>@context.User.Identity.Name</b>!
+    </Authorized>
+    <NotAuthorized>
+        <MudStack Spacing="1">
+            <MudButton OnClick="EntraLoginAsync" Style="@($"color:{Colors.BlueGray.Darken3}; background:{Colors.LightBlue.Lighten5};")">
+                @* <object type="image/svg+xml" data="/signin_light_button.svg" class="x-icon"></object> *@
+                <object type="image/svg+xml" data="/ms-symbollockup.svg" class="mx-3 x-icon"></object>
+                Iniciar sesión con Microsoft
+            </MudButton>
+        </MudStack>
+    </NotAuthorized>
+</Microsoft.AspNetCore.Components.Authorization.AuthorizeView>
+@code {
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+    [Inject] private AuthenticationStateProvider AuthenticationStateProvider { get; set; } = default!;
+
+    private async Task EntraLoginAsync()
+    {
+        var returnUri = NavigationManager.ToBaseRelativePath(NavigationManager.BaseUri) + "/post-login";
+        NavigationManager.NavigateTo($"/MicrosoftIdentity/Account/SignIn?redirectUri={returnUri}", true);
+    }
+}

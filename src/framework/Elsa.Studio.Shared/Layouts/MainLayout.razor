@@ -14,8 +14,10 @@
             @appBarItem
         }
 
-        <MudIconButton Icon="@Icons.Material.Outlined.Book" Color="Color.Inherit" Href="https://v3.elsaworkflows.io/" Target="_blank" Title="Documentation"/>
-        <MudIconButton Icon="@Icons.Custom.Brands.GitHub" Color="Color.Inherit" Href="https://github.com/elsa-workflows/elsa-core" Target="_blank" Title="Source code"/>
+        @* <MudIconButton Icon="@Icons.Material.Outlined.Book" Color="Color.Inherit" Href="https://v3.elsaworkflows.io/" Target="_blank" Title="Documentation"/>
+        <MudIconButton Icon="@Icons.Custom.Brands.GitHub" Color="Color.Inherit" Href="https://github.com/elsa-workflows/elsa-core" Target="_blank" Title="Source code"/> *@
+
+        <LoginLogoutNavItem />
 
         @if (IsDarkMode)
         {
@@ -26,7 +28,7 @@
             <MudToggleIconButton Icon="@Icons.Material.Outlined.DarkMode" Color="Color.Inherit" @onclick="@ToggleDarkMode"></MudToggleIconButton>
         }
 
-        <MudIconButton Icon="@Icons.Material.Outlined.Info" Color="Color.Inherit" @onclick="@ShowProductInfo"/>
+        @* <MudIconButton Icon="@Icons.Material.Outlined.Info" Color="Color.Inherit" @onclick="@ShowProductInfo"/> *@
     </MudAppBar>
     <MudDrawer @bind-Open="_drawerOpen" Elevation="0" ClipMode="DrawerClipMode.Always">
         <MudDrawerHeader>
