@@ -1,3 +1,5 @@
+@inject ILocalizer Localizer
+
 @{
     var inputDescriptor = EditorContext.InputDescriptor;
     var displayName = inputDescriptor.DisplayName;
@@ -6,17 +8,16 @@
 
 <ExpressionInput EditorContext="@EditorContext">
     <ChildContent>
-        
         <MudChipField 
             @ref="_chipField"
             T="string"
-            Label="@displayName"
+            Label="@Localizer[displayName]"
             Lines="1"
             WrapChips="true"
             Margin="Margin.Dense"
             Values="@_items"
             Variant="Variant.Outlined"
-            HelperText="@description"
+            HelperText="@Localizer[description]"
             Immediate="true"
             AutoSize="true"
             ShrinkLabel="true"
@@ -26,8 +27,6 @@
             OnKeyDown="@OnKeyDown"
             ValuesChanged="@OnValuesChanges"
             ReadOnly="EditorContext.IsReadOnly"
-            Disabled="EditorContext.IsReadOnly"
-        />
-        
+            Disabled="EditorContext.IsReadOnly"/>
     </ChildContent>
 </ExpressionInput>

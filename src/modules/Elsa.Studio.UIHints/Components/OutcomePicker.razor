@@ -1,4 +1,6 @@
 @using Elsa.Api.Client.Shared.UIHints.DropDown
+@inject ILocalizer Localizer
+
 @{
     var inputDescriptor = EditorContext.InputDescriptor;
     var displayName = inputDescriptor.DisplayName;
@@ -6,13 +8,14 @@
     var selectedValue = GetSelectedValue();
     var searchBox = _items.Count > 10;
 }
+
 <ExpressionInput EditorContext="@EditorContext">
     <ChildContent>
         <MudSelectExtended
             T="SelectListItem"
-            Label="@displayName"
+            Label="@Localizer[displayName]"
             Variant="Variant.Outlined"
-            HelperText="@description"
+            HelperText="@Localizer[description]"
             Margin="Margin.Dense"
             Value="@selectedValue"
             SearchBox="@searchBox"

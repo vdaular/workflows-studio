@@ -10,7 +10,7 @@ on:
       - 'feature/*'
       - 'issue/*'
       - 'patch/*'
-      - 'enh/*'
+      - 'rc/*'
   release:
     types: [ prereleased, published ]
 env:
@@ -49,7 +49,7 @@ jobs:
         run: |
           if [[ "${{ github.ref }}" == refs/tags/* && "${{ github.event_name }}" == "release" && ("${{ github.event.action }}" == "published" || "${{ github.event.action }}" == "prereleased") ]]; then
             git fetch --no-tags --prune --depth=1 origin +refs/heads/*:refs/remotes/origin/*
-            git branch --remote --contains | grep origin/patch/3.3.2
+            git branch --remote --contains | grep origin/rc/3.4.0
           else
             git fetch --no-tags --prune --depth=1 origin +refs/heads/*:refs/remotes/origin/*
             git branch --remote --contains | grep origin/${BRANCH_NAME}
@@ -146,7 +146,7 @@ jobs:
           done
         env:
           NODE_AUTH_TOKEN: ${{secrets.FEEDZ_API_KEY_BASE64}}
-          
+
       - name: Download npm react Packages
         uses: actions/download-artifact@v4
         with:
@@ -188,7 +188,7 @@ jobs:
           done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_API_KEY }}
-          
+
       - name: Download npm react Packages
         uses: actions/download-artifact@v4
         with:

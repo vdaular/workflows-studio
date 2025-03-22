@@ -43,16 +43,20 @@ var backendApiConfig = new BackendApiConfig
         options.AuthenticationHandler = typeof(AuthenticatingApiHttpMessageHandler);
         options.ConfigureHttpClient = (_, client) =>
         {
-            // if debugging is enabled, set a long timeout
-            if (Debugger.IsAttached)
-                client.Timeout = TimeSpan.FromHours(1);
+            // Set a long time out to simplify debugging both Elsa Studio and the Elsa Server backend.
+            client.Timeout = TimeSpan.FromHours(1);
         };
     },
 };
 
 var localizationConfig = new LocalizationConfig
 {
-    ConfigureLocalizationOptions = options => configuration.GetSection(LocalizationOptions.LocalizationSection).Bind(options),
+    ConfigureLocalizationOptions = options =>
+    {
+        configuration.GetSection(LocalizationOptions.LocalizationSection).Bind(options);
+        options.SupportedCultures = new[] { options?.DefaultCulture ?? new LocalizationOptions().DefaultCulture }
+            .Concat(options?.SupportedCultures.Where(culture => culture != options?.DefaultCulture) ?? Enumerable.Empty<string>()) .ToArray();
+    }
 };
 
 builder.Services.AddScoped<IBrandingProvider, StudioBrandingProvider>();
