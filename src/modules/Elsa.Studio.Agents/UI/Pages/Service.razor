@@ -31,6 +31,7 @@
                                    Label="@Localizer["Type"]"
                                    Variant="Variant.Outlined"
                                    HelperText="@Localizer["The type of the service."]">
+                            <MudSelectItem T="string" Value="@("OllamaChatCompletion")">@Localizer["OllamaChatCompletion"]</MudSelectItem>
                             <MudSelectItem T="string" Value="@("OpenAIChatCompletion")">@Localizer["OpenAIChatCompletion"]</MudSelectItem>
                             <MudSelectItem T="string" Value="@("OpenAITextToImage")">@Localizer["OpenAITextToImage"]</MudSelectItem>
                         </MudSelect>
