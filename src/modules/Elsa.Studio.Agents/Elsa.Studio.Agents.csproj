@@ -10,8 +10,8 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Elsa.Agents.Models" />
-    </ItemGroup>
+		<PackageReference Include="Elsa.Integrations.Agents.Models" />
+	</ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\..\framework\Elsa.Studio.Shared\Elsa.Studio.Shared.csproj" />
