@@ -21,10 +21,12 @@ public partial class ExpressionEditor : IDisposable
     private string? _selectedExpressionType;
     private StandaloneCodeEditor? _monacoEditor;
     private bool _isInternalContentChange;
+    private bool _isInitialized;
     private string _monacoEditorId = $"monaco-editor-{Guid.NewGuid()}:N";
     private string? _lastMonacoEditorContent;
     private RateLimitedFunc<Expression, Task> _throttledValueChanged;
     private ICollection<ExpressionDescriptor> _expressionDescriptors = new List<ExpressionDescriptor>();
+    private TaskCompletionSource<bool>? _initializationTcs;
 
     /// <inheritdoc />
     public ExpressionEditor()
@@ -35,8 +37,8 @@ public partial class ExpressionEditor : IDisposable
     /// <summary>
     /// The content to render inside the editor.
     /// </summary>
-    [Parameter] public RenderFragment ChildContent { get; set; } = default!;
-    
+    [Parameter] public RenderFragment ChildContent { get; set; } = null!;
+
     [Parameter] public Expression? Expression { get; set; } = new(string.Empty, string.Empty);
     [Parameter] public string DefaultOption { get; set; } = "Default";
     [Parameter] public string DisplayName { get; set; } = string.Empty;
@@ -45,26 +47,41 @@ public partial class ExpressionEditor : IDisposable
     [Parameter] public IDictionary<string, object> CustomProperties { get; set; } = new Dictionary<string, object>();
     [Parameter] public Func<Expression?, Task>? ExpressionChanged { get; set; }
 
-    [Inject] private TypeDefinitionService TypeDefinitionService { get; set; } = default!;
-    [Inject] private IExpressionService ExpressionService { get; set; } = default!;
-    [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
-    [Inject] private IEnumerable<IMonacoHandler> MonacoHandlers { get; set; } = default!;
-    [Inject] private IUIHintService UIHintService { get; set; } = default!;
+    [Inject] private TypeDefinitionService TypeDefinitionService { get; set; } = null!;
+    [Inject] private IExpressionService ExpressionService { get; set; } = null!;
+    [Inject] private IJSRuntime JSRuntime { get; set; } = null!;
+    [Inject] private IEnumerable<IMonacoHandler> MonacoHandlers { get; set; } = null!;
+    [Inject] private IUIHintService UIHintService { get; set; } = null!;
     private IEnumerable<ExpressionDescriptor> BrowsableExpressionDescriptors => _expressionDescriptors.Where(x => x.IsBrowsable);
     private ExpressionDescriptor? SelectedExpressionDescriptor => _expressionDescriptors.FirstOrDefault(x => x.Type == _selectedExpressionType);
     private string SelectedExpressionTypeDisplayName => SelectedExpressionDescriptor?.DisplayName ?? DefaultOption;
     private string MonacoLanguage => SelectedExpressionDescriptor?.GetMonacoLanguage() ?? string.Empty;
     private bool DisplayCodeEditor => _selectedExpressionType != null && _selectedExpressionType != DefaultOption;
     private bool DisplayModePicker => !DisplayCodeEditor;
-    private string? ButtonIcon => DisplayModePicker ? Icons.Material.Filled.MoreVert : default;
-    private string? ButtonLabel => DisplayModePicker ? default : SelectedExpressionTypeDisplayName;
+    private string? ButtonIcon => DisplayModePicker ? Icons.Material.Filled.MoreVert : null;
+    private string? ButtonLabel => DisplayModePicker ? null : SelectedExpressionTypeDisplayName;
     private Variant ButtonVariant => DisplayModePicker ? default : Variant.Filled;
     private Color ButtonColor => DisplayModePicker ? default : Color.Primary;
-    private string? ButtonEndIcon => DisplayModePicker ? default : Icons.Material.Filled.KeyboardArrowDown;
+    private string? ButtonEndIcon => DisplayModePicker ? null : Icons.Material.Filled.KeyboardArrowDown;
     private Color ButtonEndColor => DisplayModePicker ? default : Color.Secondary;
 
     private string? MonacoSyntax { get; set; }
     private bool MonacoSyntaxExist => !string.IsNullOrEmpty(MonacoLanguage);
+
+    /// <summary>
+    /// Updates the internal state of the editor with the provided expression.
+    /// </summary>
+    /// <param name="expression">The expression to update the editor with. Can be null.</param>
+    public async Task UpdateAsync(Expression? expression)
+    {
+        if (!_isInitialized || _monacoEditor == null)
+        {
+            _initializationTcs ??= new();
+            await _initializationTcs.Task;
+        }
+
+        await UpdateMonacoEditorAsync(expression);
+    }
 
     /// <inheritdoc />
     protected override async Task OnInitializedAsync()
@@ -78,7 +95,7 @@ public partial class ExpressionEditor : IDisposable
     {
         if (_monacoEditor == null)
             return;
-        
+
         if (SelectedExpressionDescriptor?.Type == null)
             return;
 
@@ -99,13 +116,14 @@ public partial class ExpressionEditor : IDisposable
 
     private StandaloneEditorConstructionOptions ConfigureMonacoEditor(StandaloneCodeEditor editor)
     {
-        return new StandaloneEditorConstructionOptions
+        return new()
         {
             Language = MonacoLanguage,
             Value = Expression?.Value?.ToString() ?? "",
             FontFamily = "Roboto Mono, monospace",
             RenderLineHighlight = "none",
-            Minimap = new EditorMinimapOptions
+            FixedOverflowWidgets = true,
+            Minimap = new()
             {
                 Enabled = false
             },
@@ -135,7 +153,7 @@ public partial class ExpressionEditor : IDisposable
         await UpdateMonacoLanguageAsync();
         StateHasChanged();
     }
-    
+
     private async Task OnMonacoContentChangedAsync(ModelContentChangedEvent e)
     {
         if (_isInternalContentChange)
@@ -147,7 +165,7 @@ public partial class ExpressionEditor : IDisposable
         // This happens from within the monaco editor itself (or the Blazor wrapper, not sure).
         if (value == _lastMonacoEditorContent)
             return;
-        
+
         var expression = new Expression(_selectedExpressionType!, value);
         _lastMonacoEditorContent = value;
         await ThrottleValueChangedCallbackAsync(expression);
@@ -166,9 +184,27 @@ public partial class ExpressionEditor : IDisposable
 
     private async Task OnMonacoInitializedAsync()
     {
+        _isInitialized = true;
+
+        if (_initializationTcs != null)
+        {
+            _initializationTcs.SetResult(true);
+            _initializationTcs = null;
+            return;
+        }
+
+        await UpdateMonacoEditorAsync(Expression);
+    }
+
+    private async Task UpdateMonacoEditorAsync(Expression? expression)
+    {
         _isInternalContentChange = true;
         var model = await _monacoEditor!.GetModel();
-        var expressionText = Expression?.Value?.ToString() ?? "";
+        var expressionText = expression?.Value?.ToString() ?? string.Empty;
+
+        if (expression?.Type != null)
+            _selectedExpressionType = expression.Type;
+
         _lastMonacoEditorContent = expressionText;
         await model.SetValue(expressionText);
         _isInternalContentChange = false;
@@ -178,9 +214,9 @@ public partial class ExpressionEditor : IDisposable
 
     private async Task RunMonacoHandlersAsync(StandaloneCodeEditor editor)
     {
-        if(SelectedExpressionDescriptor == null)
+        if (SelectedExpressionDescriptor == null)
             return;
-        
+
         var context = new MonacoContext(editor, SelectedExpressionDescriptor, CustomProperties);
 
         foreach (var handler in MonacoHandlers)
