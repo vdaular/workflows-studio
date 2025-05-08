@@ -64,7 +64,7 @@
         Clearable="true"
         DebounceInterval="1500"
         Immediate="true"
-        Class="me-3"
+        Class="me-3 mt-1"
         ValueChanged="@OnSearchTermChanged"/>
 
     <MudSelectExtended
@@ -235,9 +235,9 @@
             </MudTooltip>
         </MudTd>
         <MudTd DataLabel="@Localizer["Workflows"]">
-            <MudTooltip Text="@context.WorkflowDefinition.Name">
+            <MudTooltip Text="@context.WorkflowDefinitionName">
                 <div style="text-overflow: ellipsis; overflow: hidden; max-width: 200px; white-space: nowrap;">
-                    @context.WorkflowDefinition.Name
+                    @context.WorkflowDefinitionName
                 </div>
             </MudTooltip>
         </MudTd>
