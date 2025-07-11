@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+﻿<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
 
     <PropertyGroup>
         <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
@@ -24,7 +24,6 @@
       <ProjectReference Include="..\..\modules\Elsa.Studio.Dashboard\Elsa.Studio.Dashboard.csproj" />
       <ProjectReference Include="..\..\modules\Elsa.Studio.Localization.BlazorWasm\Elsa.Studio.Localization.BlazorWasm.csproj" />
       <ProjectReference Include="..\..\modules\Elsa.Studio.Login.BlazorWasm\Elsa.Studio.Login.BlazorWasm.csproj" />
-      <ProjectReference Include="..\..\modules\Elsa.Studio.WorkflowContexts\Elsa.Studio.WorkflowContexts.csproj" />
     </ItemGroup>
 
 </Project>

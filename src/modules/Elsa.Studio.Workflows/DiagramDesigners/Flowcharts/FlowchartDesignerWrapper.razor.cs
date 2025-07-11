@@ -6,6 +6,8 @@ using Elsa.Api.Client.Resources.ActivityDescriptors.Models;
 using Elsa.Api.Client.Shared.Models;
 using Elsa.Studio.Workflows.Designer.Components;
 using Elsa.Studio.Workflows.Domain.Contracts;
+using Elsa.Studio.Workflows.Domain.Models;
+using Elsa.Studio.Workflows.Extensions;
 using Elsa.Studio.Workflows.Models;
 using Elsa.Studio.Workflows.UI.Args;
 using Elsa.Studio.Workflows.UI.Models;
@@ -23,7 +25,7 @@ public partial class FlowchartDesignerWrapper
     /// <summary>
     /// The flowchart to display.
     /// </summary>
-    [Parameter] public JsonObject Flowchart { get; set; } = default!;
+    [Parameter] public JsonObject Flowchart { get; set; } = null!;
 
     /// <summary>
     /// A map of activity stats.
@@ -40,6 +42,8 @@ public partial class FlowchartDesignerWrapper
     /// </summary>
     [Parameter] public EventCallback<JsonObject> ActivitySelected { get; set; }
 
+    [Parameter] public EventCallback<JsonObject> ActivityUpdated { get; set; }
+
     /// <summary>
     /// An event raised when an embedded port is selected.
     /// </summary>
@@ -55,24 +59,39 @@ public partial class FlowchartDesignerWrapper
     /// </summary>
     [Parameter] public EventCallback GraphUpdated { get; set; }
 
-    [CascadingParameter] private DragDropManager DragDropManager { get; set; } = default!;
-    [Inject] private IIdentityGenerator IdentityGenerator { get; set; } = default!;
-    [Inject] private IActivityNameGenerator ActivityNameGenerator { get; set; } = default!;
-    private FlowchartDesigner Designer { get; set; } = default!;
+    [CascadingParameter] private DragDropManager DragDropManager { get; set; } = null!;
+    [Inject] private IIdentityGenerator IdentityGenerator { get; set; } = null!;
+    [Inject] private IActivityNameGenerator ActivityNameGenerator { get; set; } = null!;
+    private FlowchartDesigner Designer { get; set; } = null!;
+
+    private string? _lastFlowchartId;
 
     /// <summary>
     /// Loads the specified flowchart activity into the designer.
     /// </summary>
     /// <param name="activity">The flowchart activity to load.</param>
     /// <param name="activityStats">A map of activity stats.</param>
-    public async Task LoadFlowchartAsync(JsonObject activity, IDictionary<string, ActivityStats>? activityStats = default)
+    public async Task LoadFlowchartAsync(
+        JsonObject activity,
+        IDictionary<string, ActivityStats>? activityStats = null
+    )
     {
-        if (activity.GetTypeName() != "Elsa.Flowchart")
-            throw new ArgumentException("Activity must be an Elsa.Flowchart", nameof(activity));
+        // 1) Unwrap any container to the real Elsa.Flowchart
+        var flowchart = activity.GetFlowchart() ?? activity.FindActivitiesContainer();
 
-        Flowchart = activity;
+        if (flowchart == null)
+            return;
+        // 2) Bail out if it's the exact same chart we already have
+        var id = flowchart.GetId();
+        if (id == _lastFlowchartId)
+            return;
+
+        // 3) Otherwise record and hand off
+        _lastFlowchartId = id;
+        Flowchart = flowchart;
         ActivityStats = activityStats;
-        await Designer.LoadFlowchartAsync(activity, activityStats);
+
+        await Designer.LoadFlowchartAsync(flowchart, activityStats);
     }
 
     /// <summary>
@@ -138,9 +157,9 @@ public partial class FlowchartDesignerWrapper
             ["version"] = activityDescriptor.Version,
         });
 
-        newActivity.SetDesignerMetadata(new ActivityDesignerMetadata
+        newActivity.SetDesignerMetadata(new()
         {
-            Position = new Position(x, y)
+            Position = new(x, y)
         });
 
         // Copy constructor values from the activity descriptor.

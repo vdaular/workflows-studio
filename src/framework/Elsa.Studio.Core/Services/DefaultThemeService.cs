@@ -48,6 +48,12 @@ public class DefaultThemeService : IThemeService
             },
             PaletteLight =
             {
+                Primary = new("0ea5e9"),
+                DrawerBackground = new("#f8fafc"),
+                AppbarBackground = new("#0ea5e9"),
+                AppbarText = new("#ffffff"),
+                Background = new("#ffffff"),
+                Surface = new("#f8fafc")
                 Primary = new MudColor("#2563EB"), // Azul profesional, equilibrado y confiable
                 Secondary = new MudColor("#10B981"), // Verde suave para elementos secundarios (éxito, validación)
                 AppbarBackground = new MudColor("#F3F4F6"), // Barra de navegación con gris claro
@@ -67,6 +73,11 @@ public class DefaultThemeService : IThemeService
             },
             PaletteDark = 
             {
+                Primary = new("0ea5e9"),
+                AppbarBackground = new("#0f172a"),
+                DrawerBackground = new("#0f172a"),
+                Background = new("#0f172a"),
+                Surface = new("#182234"),
                 Primary = new MudColor("#2563EB"), // Azul profesional y menos saturado
                 AppbarBackground = new MudColor("#0F172A"), // Fondo principal, tono oscuro
                 DrawerBackground = new MudColor("#0F172A"),

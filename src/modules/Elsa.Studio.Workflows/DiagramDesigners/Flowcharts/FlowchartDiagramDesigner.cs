@@ -1,5 +1,7 @@
 using System.Text.Json.Nodes;
 using Elsa.Studio.Localization;
+using Elsa.Studio.Workflows.Domain.Models;
+using Elsa.Studio.Workflows.Models;
 using Elsa.Studio.Workflows.UI.Contexts;
 using Elsa.Studio.Workflows.UI.Contracts;
 using Elsa.Studio.Workflows.UI.Models;
@@ -61,6 +63,7 @@ public class FlowchartDiagramDesigner(ILocalizer localizer) : IDiagramDesignerTo
             builder.AddAttribute(sequence++, nameof(FlowchartDesignerWrapper.IsReadOnly), context.IsReadOnly);
             builder.AddAttribute(sequence++, nameof(FlowchartDesignerWrapper.ActivityStats), context.ActivityStats);
             builder.AddAttribute(sequence++, nameof(FlowchartDesignerWrapper.ActivitySelected), context.ActivitySelectedCallback);
+            builder.AddAttribute(sequence++, nameof(FlowchartDesignerWrapper.ActivityUpdated), context.ActivityUpdated);
             builder.AddAttribute(sequence++, nameof(FlowchartDesignerWrapper.ActivityEmbeddedPortSelected), context.ActivityEmbeddedPortSelectedCallback);
             builder.AddAttribute(sequence++, nameof(FlowchartDesignerWrapper.ActivityDoubleClick), context.ActivityDoubleClickCallback);
             builder.AddAttribute(sequence++, nameof(FlowchartDesignerWrapper.GraphUpdated), context.GraphUpdatedCallback);
@@ -103,7 +106,8 @@ public class FlowchartDiagramDesigner(ILocalizer localizer) : IDiagramDesignerTo
 
     private async Task InvokeDesignerActionAsync(Func<FlowchartDesignerWrapper, Task> action)
     {
-        if (_designerWrapper != null) await action(_designerWrapper);
+        if (_designerWrapper != null && action != null)
+            await action(_designerWrapper);
     }
 
     private Task OnZoomToFitClicked() => _designerWrapper != null ? _designerWrapper.ZoomToFitAsync() : Task.CompletedTask;

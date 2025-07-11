@@ -1,11 +1,15 @@
 using Elsa.Api.Client.Resources.WorkflowDefinitions.Enums;
+using Elsa.Api.Client.Resources.WorkflowDefinitions.Models;
 using Elsa.Api.Client.Resources.WorkflowDefinitions.Requests;
 using Elsa.Api.Client.Resources.WorkflowInstances.Requests;
 using Elsa.Api.Client.Shared.Models;
 using Elsa.Studio.Contracts;
 using Elsa.Studio.DomInterop.Contracts;
 using Elsa.Studio.Localization;
+using Elsa.Studio.Models;
+using Elsa.Studio.Workflows.Contracts;
 using Elsa.Studio.Workflows.Domain.Contracts;
+using Elsa.Studio.Workflows.Domain.Models;
 using Elsa.Studio.Workflows.Models;
 using Humanizer;
 using Microsoft.AspNetCore.Components;
@@ -25,15 +29,16 @@ public partial class WorkflowDefinitionList
     /// An event that is invoked when a workflow definition is edited.
     [Parameter] public EventCallback<string> EditWorkflowDefinition { get; set; }
 
-    [Inject] private IDialogService DialogService { get; set; } = default!;
-    [Inject] private NavigationManager navigation { get; set; }
-    [Inject] private ISnackbar Snackbar { get; set; } = default!;
-    [Inject] private IWorkflowDefinitionService WorkflowDefinitionService { get; set; } = default!;
-    [Inject] private IWorkflowInstanceService WorkflowInstanceService { get; set; } = default!;
-    [Inject] private IWorkflowDefinitionImporter WorkflowDefinitionImporter { get; set; } = default!;
-    [Inject] private IFiles Files { get; set; } = default!;
-    [Inject] private IDomAccessor DomAccessor { get; set; } = default!;
-    [Inject] private IMediator Mediator { get; set; } = default!;
+    [Inject] private IDialogService DialogService { get; set; } = null!;
+    [Inject] private NavigationManager Navigation { get; set; }
+    [Inject] private IUserMessageService UserMessageService { get; set; } = null!;
+    [Inject] private IWorkflowDefinitionService WorkflowDefinitionService { get; set; } = null!;
+    [Inject] private IWorkflowInstanceService WorkflowInstanceService { get; set; } = null!;
+    [Inject] private IWorkflowDefinitionImporter WorkflowDefinitionImporter { get; set; } = null!;
+    [Inject] private IFiles Files { get; set; } = null!;
+    [Inject] private IDomAccessor DomAccessor { get; set; } = null!;
+    [Inject] private IMediator Mediator { get; set; } = null!;
+    [Inject] private ICreateWorkflowDialogComponentProvider CreateWorkflowDialogComponentProvider { get; set; } = null!;
     private string SearchTerm { get; set; } = string.Empty;
     private bool IsReadOnlyMode { get; set; }
     private string ReadonlyWorkflowsExcluded => Localizer["The read-only workflows will not be affected."];
@@ -52,7 +57,7 @@ public partial class WorkflowDefinitionList
                 : OrderDirection.Ascending
         };
 
-        var latestWorkflowDefinitionsResponse = await WorkflowDefinitionService.ListAsync(request, VersionOptions.Latest);
+        var latestWorkflowDefinitionsResponse = await WorkflowDefinitionService.ListAsync(request, VersionOptions.Latest, cancellationToken);
         IsReadOnlyMode = (latestWorkflowDefinitionsResponse?.Links?.Count(l => l.Rel == "bulk-publish") ?? 0) == 0;
         var unpublishedWorkflowDefinitionIds = latestWorkflowDefinitionsResponse.Items.Where(x => !x.IsPublished).Select(x => x.DefinitionId).ToList();
 
@@ -120,17 +125,16 @@ public partial class WorkflowDefinitionList
             FullWidth = true,
             MaxWidth = MaxWidth.Small
         };
-
-        var dialogInstance = await DialogService.ShowAsync<CreateWorkflowDialog>(Localizer["New workflow"], parameters, options);
+        
+        var dialogComponentType = CreateWorkflowDialogComponentProvider.GetComponentType();
+        var dialogInstance = await DialogService.ShowAsync(dialogComponentType, Localizer["New workflow"], parameters, options);
         var dialogResult = await dialogInstance.Result;
 
         if (!dialogResult.Canceled)
         {
-            var newWorkflowModel = (WorkflowMetadataModel)dialogResult.Data;
-            var result = await WorkflowDefinitionService.CreateNewDefinitionAsync(newWorkflowModel.Name!, newWorkflowModel.Description!);
-
+            var result = (Result<WorkflowDefinition, ValidationErrors>)dialogResult.Data!;
             await result.OnSuccessAsync(definition => EditAsync(definition.DefinitionId));
-            result.OnFailed(errors => Snackbar.Add(string.Join(Environment.NewLine, errors.Errors)));
+            result.OnFailed(errors => UserMessageService.ShowSnackbarTextMessage(string.Join(Environment.NewLine, errors.Errors)));
         }
     }
 
@@ -166,11 +170,11 @@ public partial class WorkflowDefinitionList
 
         if (response.CannotStart)
         {
-            Snackbar.Add(Localizer["The workflow cannot be started"], Severity.Error);
+            UserMessageService.ShowSnackbarTextMessage(Localizer["The workflow cannot be started"], Severity.Error);
             return;
         }
 
-        Snackbar.Add(Localizer["Successfully started workflow"], Severity.Success);
+        UserMessageService.ShowSnackbarTextMessage(Localizer["Successfully started workflow"], Severity.Success);
     }
 
     private async Task OnDeleteClicked(WorkflowDefinitionRow workflowDefinitionRow)
@@ -240,7 +244,7 @@ public partial class WorkflowDefinitionList
             var message = response.Published.Count == 1
                 ? Localizer["One workflow is published"]
                 : Localizer["{0} workflows are published", response.Published.Count];
-            Snackbar.Add(message, Severity.Success, options => { options.SnackbarVariant = Variant.Filled; });
+            UserMessageService.ShowSnackbarTextMessage(message, Severity.Success, options => { options.SnackbarVariant = Variant.Filled; });
         }
 
         if (response.AlreadyPublished.Count > 0)
@@ -248,7 +252,7 @@ public partial class WorkflowDefinitionList
             var message = response.AlreadyPublished.Count == 1
                 ? Localizer["One workflow is already published"]
                 : Localizer["{0} workflows are already published", response.AlreadyPublished.Count];
-            Snackbar.Add(message, Severity.Info, options => { options.SnackbarVariant = Variant.Filled; });
+            UserMessageService.ShowSnackbarTextMessage(message, Severity.Info, options => { options.SnackbarVariant = Variant.Filled; });
         }
 
         if (response.UpdatedConsumers.Count > 0)
@@ -256,7 +260,7 @@ public partial class WorkflowDefinitionList
             var message = response.UpdatedConsumers.Count == 1
                 ? Localizer["One workflow consuming a published workflow has been updated"]
                 : Localizer["{0} workflows consuming published workflows have been updated", response.UpdatedConsumers.Count];
-            Snackbar.Add(message, Severity.Info, options =>
+            UserMessageService.ShowSnackbarTextMessage(message, Severity.Info, options =>
             {
                 options.SnackbarVariant = Variant.Filled;
                 options.VisibleStateDuration = 3000;
@@ -268,7 +272,7 @@ public partial class WorkflowDefinitionList
             var message = response.NotFound.Count == 1
                 ? Localizer["One workflow is not found"]
                 : Localizer["{0} workflows are not found", response.NotFound.Count];
-            Snackbar.Add(message, Severity.Warning, options => { options.SnackbarVariant = Variant.Filled; });
+            UserMessageService.ShowSnackbarTextMessage(message, Severity.Warning, options => { options.SnackbarVariant = Variant.Filled; });
         }
         _selectedRows.Clear();
         Reload();
@@ -290,7 +294,7 @@ public partial class WorkflowDefinitionList
             var message = response.Retracted.Count == 1
                 ? Localizer["One workflow is unpublished"]
                 : Localizer["{0} workflows are unpublished", response.Retracted.Count];
-            Snackbar.Add(message, Severity.Success, options => { options.SnackbarVariant = Variant.Filled; });
+            UserMessageService.ShowSnackbarTextMessage(message, Severity.Success, options => { options.SnackbarVariant = Variant.Filled; });
         }
 
         if (response.AlreadyRetracted.Count > 0)
@@ -298,7 +302,7 @@ public partial class WorkflowDefinitionList
             var message = response.AlreadyRetracted.Count == 1
                 ? Localizer["One workflow is already unpublished"]
                 : Localizer["{0} workflows are already unpublished", response.AlreadyRetracted.Count];
-            Snackbar.Add(message, Severity.Info, options => { options.SnackbarVariant = Variant.Filled; });
+            UserMessageService.ShowSnackbarTextMessage(message, Severity.Info, options => { options.SnackbarVariant = Variant.Filled; });
         }
 
         if (response.NotFound.Count > 0)
@@ -306,7 +310,7 @@ public partial class WorkflowDefinitionList
             var message = response.NotFound.Count == 1
                 ? Localizer["One workflow is not found"]
                 : Localizer["{0} workflows are not found", response.NotFound.Count];
-            Snackbar.Add(message, Severity.Warning, options => { options.SnackbarVariant = Variant.Filled; });
+            UserMessageService.ShowSnackbarTextMessage(message, Severity.Warning, options => { options.SnackbarVariant = Variant.Filled; });
         }
         _selectedRows.Clear();
         Reload();
@@ -338,7 +342,7 @@ public partial class WorkflowDefinitionList
             successfulResultCount > 0 && failedResultCount == 0 ? Localizer["{0} {1} imported successfully.", successfulResultCount, successfulWorkflowsTerm] :
             successfulResultCount == 0 && failedResultCount > 0 ? Localizer["Failed to import {0} {1}.", failedResultCount, failedWorkflowsTerm] : Localizer["{0} {1} imported successfully.", successfulResultCount, successfulWorkflowsTerm] + " " + Localizer["Failed to import {0} {1}.", failedResultCount, failedWorkflowsTerm];
         var severity = results.Count == 0 ? Severity.Info : successfulResultCount > 0 && failedResultCount > 0 ? Severity.Warning : failedResultCount == 0 ? Severity.Success : Severity.Error;
-        Snackbar.Add(message, severity, options =>
+        UserMessageService.ShowSnackbarTextMessage(message, severity, options =>
         {
             options.SnackbarVariant = Variant.Filled;
             options.CloseAfterNavigation = failedResultCount > 0;
@@ -361,11 +365,11 @@ public partial class WorkflowDefinitionList
         var response = await WorkflowDefinitionService.PublishAsync(definitionId);
         if (response.AlreadyPublished)
         {
-            Snackbar.Add(Localizer["Workflow was already published"], Severity.Info, options => { options.SnackbarVariant = Variant.Filled; });
+            UserMessageService.ShowSnackbarTextMessage(Localizer["Workflow was already published"], Severity.Info, options => { options.SnackbarVariant = Variant.Filled; });
         }
         else
         {
-            Snackbar.Add(Localizer["Workflow published"], Severity.Success, options => { options.SnackbarVariant = Variant.Filled; });
+            UserMessageService.ShowSnackbarTextMessage(Localizer["Workflow published"], Severity.Success, options => { options.SnackbarVariant = Variant.Filled; });
         }
 
         if (response.ConsumingWorkflowCount > 0)
@@ -373,7 +377,7 @@ public partial class WorkflowDefinitionList
             var message = response.ConsumingWorkflowCount == 1
                 ? Localizer["One workflow consuming a published workflow has been updated"]
                 : Localizer["{0} workflows consuming published workflows have been updated", response.ConsumingWorkflowCount];
-            Snackbar.Add(message, Severity.Info, options =>
+            UserMessageService.ShowSnackbarTextMessage(message, Severity.Info, options =>
             {
                 options.SnackbarVariant = Variant.Filled;
                 options.VisibleStateDuration = 3000;
@@ -386,7 +390,7 @@ public partial class WorkflowDefinitionList
     private async Task OnRetractClicked(string definitionId)
     {
         await WorkflowDefinitionService.RetractAsync(definitionId);
-        Snackbar.Add(Localizer["Workflow retracted"], Severity.Success, options => { options.SnackbarVariant = Variant.Filled; });
+        UserMessageService.ShowSnackbarTextMessage(Localizer["Workflow retracted"], Severity.Success, options => { options.SnackbarVariant = Variant.Filled; });
         Reload();
     }
 

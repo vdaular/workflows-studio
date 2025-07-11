@@ -8,14 +8,16 @@ using Elsa.Studio.Extensions;
 using Elsa.Studio.Workflows.Designer.Contracts;
 using Elsa.Studio.Workflows.Designer.Interop;
 using Elsa.Studio.Workflows.Designer.Models;
+using Elsa.Studio.Workflows.Designer.Options;
 using Elsa.Studio.Workflows.Designer.Services;
 using Elsa.Studio.Workflows.Domain.Contracts;
+using Elsa.Studio.Workflows.Domain.Models;
 using Elsa.Studio.Workflows.Extensions;
 using Elsa.Studio.Workflows.UI.Args;
-using Elsa.Studio.Workflows.UI.Models;
 using Humanizer;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
 using MudBlazor.Utilities;
 using ThrottleDebounce;
@@ -29,18 +31,18 @@ public partial class FlowchartDesigner : IDisposable, IAsyncDisposable
 {
     private readonly string _containerId = $"container-{Guid.NewGuid():N}";
     private DotNetObjectReference<FlowchartDesigner>? _componentRef;
-    private IFlowchartMapper? _flowchartMapper = null!;
-    private IActivityMapper? _activityMapper = null!;
+    private IFlowchartMapper? _flowchartMapper;
+    private IActivityMapper? _activityMapper;
     private X6GraphApi _graphApi = null!;
     private readonly PendingActionsQueue _pendingGraphActions;
-    private RateLimitedFunc<Task> _rateLimitedLoadFlowchartAction;
+    private readonly RateLimitedFunc<Task> _rateLimitedLoadFlowchartAction;
     private IDictionary<string, ActivityStats>? _activityStats;
     private JsonObject? _flowchart;
 
     /// <inheritdoc />
     public FlowchartDesigner()
     {
-        _pendingGraphActions = new PendingActionsQueue(() => new(_graphApi != null!), () => Logger);
+        _pendingGraphActions = new(() => new(_graphApi != null!), () => Logger);
         _rateLimitedLoadFlowchartAction = Debouncer.Debounce(async () => { await InvokeAsync(async () => await LoadFlowchartAsync(Flowchart, ActivityStats)); }, TimeSpan.FromMilliseconds(100));
     }
 
@@ -55,6 +57,8 @@ public partial class FlowchartDesigner : IDisposable, IAsyncDisposable
 
     /// An event raised when an activity is selected.
     [Parameter] public EventCallback<JsonObject> ActivitySelected { get; set; }
+    
+    [Parameter] public EventCallback<JsonObject> ActivityPropsChanged { get; set; }
 
     /// An event raised when an activity-embedded port is selected.
     [Parameter] public EventCallback<ActivityEmbeddedPortSelectedArgs> ActivityEmbeddedPortSelected { get; set; }
@@ -74,6 +78,7 @@ public partial class FlowchartDesigner : IDisposable, IAsyncDisposable
     [Inject] private IMapperFactory MapperFactory { get; set; } = null!;
     [Inject] private IIdentityGenerator IdentityGenerator { get; set; } = null!;
     [Inject] private IActivityNameGenerator ActivityNameGenerator { get; set; } = null!;
+    [Inject] private IOptions<DesignerOptions> Options { get; set; } = null!;
     [Inject] private ILogger<FlowchartDesigner> Logger { get; set; } = null!;
 
     /// <summary>
@@ -85,6 +90,12 @@ public partial class FlowchartDesigner : IDisposable, IAsyncDisposable
     {
         if (ActivitySelected.HasDelegate)
             await ActivitySelected.InvokeAsync(activity);
+    }
+
+    public async Task UpdateActivityAsync(JsonObject activity)
+    {
+        if (ActivityPropsChanged.HasDelegate)
+            await ActivityPropsChanged.InvokeAsync(activity);
     }
 
     /// <summary>
@@ -224,14 +235,40 @@ public partial class FlowchartDesigner : IDisposable, IAsyncDisposable
     /// </summary>
     /// <param name="activity">The flowchart to load.</param>
     /// <param name="activityStats">The activity stats to load.</param>
-    public async Task LoadFlowchartAsync(JsonObject activity, IDictionary<string, ActivityStats>? activityStats)
+    public async Task LoadFlowchartAsync(
+        JsonObject activity,
+        IDictionary<string, ActivityStats>? activityStats
+    )
     {
         Flowchart = activity;
         ActivityStats = activityStats;
+
+        // 2) Get the mapper as before
         var flowchartMapper = await GetFlowchartMapperAsync();
-        var flowchart = activity.GetFlowchart();
-        var graph = flowchartMapper.Map(flowchart, activityStats);
+
+        // 3) Instead of unwrapping only Elsa.Flowchart, find any container
+        //    with an 'activities' array (or fall back to a synthetic one)
+        var container = activity.FindActivitiesContainer() ?? CreateSyntheticContainer(activity);
+
+        // 4) Map and schedule the graph load
+        var graph = flowchartMapper.Map(container, activityStats);
         await ScheduleGraphActionAsync(() => _graphApi.LoadGraphAsync(graph));
+    }
+
+    // Helper: wrap a single activity in an 'activities' array
+    // Helper: wrap a single activity in an 'activities' array
+    // by cloning it so it has no existing parent.
+    private JsonObject CreateSyntheticContainer(JsonObject single)
+    {
+        // Make a copy so we don't reparent the original
+        var cloned = (JsonObject)single.DeepClone()!;
+
+        // Put the clone into a brand-new array
+        var arr = new JsonArray();
+        arr.Add(cloned);
+
+        // Wrap it up
+        return new JsonObject { ["activities"] = arr };
     }
 
     /// <summary>
@@ -263,10 +300,15 @@ public partial class FlowchartDesigner : IDisposable, IAsyncDisposable
     public async Task CenterContentAsync() => await ScheduleGraphActionAsync(() => _graphApi.CenterContentAsync());
 
     /// Update the Graph Layout.
-    public async Task AutoLayoutAsync(JsonObject activity, IDictionary<string, ActivityStats>? activityStats)
+    public async Task AutoLayoutAsync(
+        JsonObject activity,
+        IDictionary<string, ActivityStats>? activityStats
+    )
     {
         var flowchartMapper = await GetFlowchartMapperAsync();
         var flowchart = activity.GetFlowchart();
+        if (flowchart == null)
+            return;
         var graph = flowchartMapper.Map(flowchart, activityStats);
         await ScheduleGraphActionAsync(() => _graphApi.AutoLayoutAsync(graph));
     }
